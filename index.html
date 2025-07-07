@@ -214,7 +214,8 @@
     <h2 class="section-title">Spatial Tools</h2>
     <div class="tools__container bd-grid">
         <div class="map__wrapper">
-            <div id="map" style="height: 500px; border-radius: 10px;"></div>
+            <div id="map" style="height: 500px; border-radius: 10px; position: relative;"></div>
+            <button id="finishDraw" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: none;" class="button">Finish Drawing</button>
         </div>
 
         <div class="tools__buttons">
@@ -267,6 +268,8 @@
 
     let drawControl = null;
     let activeTool = null;
+    let currentDrawer = null;
+    let bufferDistance = 2000;
 
     function resetMap() {
         drawnItems.clearLayers();
@@ -275,11 +278,18 @@
         });
         map.closePopup();
         activeTool = null;
+        document.getElementById("finishDraw").style.display = "none";
     }
 
     function enableDrawBuffer() {
         resetMap();
         activeTool = 'buffer';
+        const userDistance = prompt("Enter buffer distance in meters:", "2000");
+        if (!userDistance || isNaN(userDistance)) {
+            alert("Invalid input. Buffer tool canceled.");
+            return;
+        }
+        bufferDistance = parseFloat(userDistance);
         alert("Click on the map to select a location for buffering.");
         new L.Draw.Marker(map).enable();
     }
@@ -287,16 +297,27 @@
     function enableDistanceMeasure() {
         resetMap();
         activeTool = 'distance';
-        alert("Draw a line to measure distance in meters. Double-click to finish drawing.");
-        new L.Draw.Polyline(map).enable();
+        alert("Click multiple points to draw a line, then press 'Finish Drawing'.");
+        currentDrawer = new L.Draw.Polyline(map);
+        currentDrawer.enable();
+        document.getElementById("finishDraw").style.display = "block";
     }
 
     function enableAreaMeasure() {
         resetMap();
         activeTool = 'area';
-        alert("Draw a polygon to calculate area in square meters. Double-click to finish drawing.");
-        new L.Draw.Polygon(map).enable();
+        alert("Click to draw polygon, then press 'Finish Drawing'.");
+        currentDrawer = new L.Draw.Polygon(map);
+        currentDrawer.enable();
+        document.getElementById("finishDraw").style.display = "block";
     }
+
+    document.getElementById("finishDraw").addEventListener("click", () => {
+        if (currentDrawer) {
+            currentDrawer.disable();
+            document.getElementById("finishDraw").style.display = "none";
+        }
+    });
 
     map.on(L.Draw.Event.CREATED, function (e) {
         const layer = e.layer;
@@ -326,11 +347,11 @@
         if (activeTool === 'buffer' && e.layerType === 'marker') {
             const pt = layer.getLatLng();
             const point = turf.point([pt.lng, pt.lat]);
-            const buffered = turf.buffer(point, 2000, { units: 'meters' });
+            const buffered = turf.buffer(point, bufferDistance, { units: 'meters' });
             const bufferLayer = L.geoJSON(buffered).addTo(map);
             L.popup()
                 .setLatLng(pt)
-                .setContent(`2,000 meter buffer created`)
+                .setContent(`${bufferDistance} meter buffer created`)
                 .openOn(map);
         }
     });
