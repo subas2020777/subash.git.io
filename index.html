@@ -231,7 +231,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@latest/dist/leaflet.draw.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@latest/dist/leaflet.draw.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@latest/dist/leaflet-draw.css" />
 <script src="https://unpkg.com/@turf/turf"></script>
 
 <style>
@@ -244,6 +244,16 @@
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+    }
+    .leaflet-container {
+        cursor: crosshair;
+    }
+    .turf-result {
+        font-weight: bold;
+        color: #fff;
+        background: #333;
+        padding: 4px 8px;
+        border-radius: 5px;
     }
 </style>
 
@@ -274,11 +284,6 @@
 
     function resetMap() {
         drawnItems.clearLayers();
-        map.eachLayer(layer => {
-            if ((layer instanceof L.GeoJSON && !layer._url) || tempLayers.includes(layer)) {
-                map.removeLayer(layer);
-            }
-        });
         tempLayers.forEach(l => map.removeLayer(l));
         tempLayers = [];
         map.closePopup();
@@ -306,7 +311,13 @@
     function enableDistanceMeasure() {
         resetMap();
         activeTool = 'distance';
-        currentDrawer = new L.Draw.Polyline(map);
+        currentDrawer = new L.Draw.Polyline(map, {
+            shapeOptions: {
+                color: '#0000ff',
+                weight: 4,
+                dashArray: '5, 10'
+            }
+        });
         currentDrawer.enable();
         document.getElementById("finishDraw").style.display = "block";
     }
@@ -314,7 +325,13 @@
     function enableAreaMeasure() {
         resetMap();
         activeTool = 'area';
-        currentDrawer = new L.Draw.Polygon(map);
+        currentDrawer = new L.Draw.Polygon(map, {
+            shapeOptions: {
+                color: '#228B22',
+                fillColor: '#228B22',
+                fillOpacity: 0.5
+            }
+        });
         currentDrawer.enable();
         document.getElementById("finishDraw").style.display = "block";
     }
@@ -339,7 +356,7 @@
             const area = turf.area(polygon);
             const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
-                .setContent(`Area: ${area.toFixed(2)} m²`)
+                .setContent(`<div class='turf-result'>Area: ${area.toFixed(2)} m²</div>`)
                 .openOn(map);
             tempLayers.push(popup);
         }
@@ -350,7 +367,7 @@
             const length = turf.length(line, { units: 'kilometers' });
             const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
-                .setContent(`Distance: ${(length * 1000).toFixed(2)} m`)
+                .setContent(`<div class='turf-result'>Distance: ${(length * 1000).toFixed(2)} m</div>`)
                 .openOn(map);
             tempLayers.push(popup);
         }
@@ -359,10 +376,16 @@
             const pt = layer.getLatLng();
             const point = turf.point([pt.lng, pt.lat]);
             const buffered = turf.buffer(point, bufferDistance / 1000, { units: 'kilometers' });
-            const bufferLayer = L.geoJSON(buffered).addTo(map);
+            const bufferLayer = L.geoJSON(buffered, {
+                style: {
+                    color: '#FF0000',
+                    fillColor: '#FF6666',
+                    fillOpacity: 0.5
+                }
+            }).addTo(map);
             const popup = L.popup()
                 .setLatLng(pt)
-                .setContent(`${bufferDistance} meter buffer created`)
+                .setContent(`<div class='turf-result'>${bufferDistance} meter buffer created</div>`)
                 .openOn(map);
             tempLayers.push(bufferLayer);
             tempLayers.push(popup);
