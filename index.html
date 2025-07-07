@@ -270,34 +270,42 @@
     let activeTool = null;
     let currentDrawer = null;
     let bufferDistance = 2000;
+    let tempLayers = [];
 
     function resetMap() {
         drawnItems.clearLayers();
         map.eachLayer(layer => {
-            if (layer instanceof L.GeoJSON && !layer._url) map.removeLayer(layer);
+            if ((layer instanceof L.GeoJSON && !layer._url) || tempLayers.includes(layer)) {
+                map.removeLayer(layer);
+            }
         });
+        tempLayers.forEach(l => map.removeLayer(l));
+        tempLayers = [];
         map.closePopup();
         activeTool = null;
+        if (currentDrawer) {
+            currentDrawer.disable();
+            currentDrawer = null;
+        }
         document.getElementById("finishDraw").style.display = "none";
     }
 
     function enableDrawBuffer() {
         resetMap();
         activeTool = 'buffer';
-        const userDistance = prompt("Enter buffer distance in meters:", "2000");
+        const userDistance = window.prompt("Enter buffer distance in meters:", "2000");
         if (!userDistance || isNaN(userDistance)) {
             alert("Invalid input. Buffer tool canceled.");
             return;
         }
         bufferDistance = parseFloat(userDistance);
-        alert("Click on the map to select a location for buffering.");
-        new L.Draw.Marker(map).enable();
+        const markerDrawer = new L.Draw.Marker(map);
+        markerDrawer.enable();
     }
 
     function enableDistanceMeasure() {
         resetMap();
         activeTool = 'distance';
-        alert("Click multiple points to draw a line, then press 'Finish Drawing'.");
         currentDrawer = new L.Draw.Polyline(map);
         currentDrawer.enable();
         document.getElementById("finishDraw").style.display = "block";
@@ -306,7 +314,6 @@
     function enableAreaMeasure() {
         resetMap();
         activeTool = 'area';
-        alert("Click to draw polygon, then press 'Finish Drawing'.");
         currentDrawer = new L.Draw.Polygon(map);
         currentDrawer.enable();
         document.getElementById("finishDraw").style.display = "block";
@@ -315,6 +322,7 @@
     document.getElementById("finishDraw").addEventListener("click", () => {
         if (currentDrawer) {
             currentDrawer.disable();
+            currentDrawer = null;
             document.getElementById("finishDraw").style.display = "none";
         }
     });
@@ -323,36 +331,41 @@
         const layer = e.layer;
         drawnItems.addLayer(layer);
 
+        document.getElementById("finishDraw").style.display = "none";
         if (activeTool === 'area' && e.layerType === 'polygon') {
             const coords = layer.getLatLngs()[0].map(pt => [pt.lng, pt.lat]);
             coords.push(coords[0]);
             const polygon = turf.polygon([coords]);
             const area = turf.area(polygon);
-            L.popup()
+            const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
                 .setContent(`Area: ${area.toFixed(2)} m²`)
                 .openOn(map);
+            tempLayers.push(popup);
         }
 
         if (activeTool === 'distance' && e.layerType === 'polyline') {
             const coords = layer.getLatLngs().map(pt => [pt.lng, pt.lat]);
             const line = turf.lineString(coords);
-            const length = turf.length(line, { units: 'meters' });
-            L.popup()
+            const length = turf.length(line, { units: 'kilometers' });
+            const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
-                .setContent(`Distance: ${length.toFixed(2)} m`)
+                .setContent(`Distance: ${(length * 1000).toFixed(2)} m`)
                 .openOn(map);
+            tempLayers.push(popup);
         }
 
         if (activeTool === 'buffer' && e.layerType === 'marker') {
             const pt = layer.getLatLng();
             const point = turf.point([pt.lng, pt.lat]);
-            const buffered = turf.buffer(point, bufferDistance, { units: 'meters' });
+            const buffered = turf.buffer(point, bufferDistance / 1000, { units: 'kilometers' });
             const bufferLayer = L.geoJSON(buffered).addTo(map);
-            L.popup()
+            const popup = L.popup()
                 .setLatLng(pt)
                 .setContent(`${bufferDistance} meter buffer created`)
                 .openOn(map);
+            tempLayers.push(bufferLayer);
+            tempLayers.push(popup);
         }
     });
 </script>
