@@ -209,197 +209,174 @@
         </div>
     </div>
 </section> -->
-<!--===== SPATIAL TOOL =====-->
-<section class="section spatial-tool" id="tools">
-    <h2 class="section-title">Spatial Tools</h2>
-    <div class="tools__container bd-grid">
-        <div class="map__wrapper">
-            <div id="map" style="height: 500px; border-radius: 10px; position: relative;"></div>
-            <button id="finishDraw" style="position: absolute; top: 10px; right: 10px; z-index: 1000; display: none;" class="button">Finish Drawing</button>
-        </div>
-
-        <div class="tools__buttons">
-            <button onclick="enableDrawBuffer()" class="button">Buffer Tool</button>
-            <button onclick="enableDistanceMeasure()" class="button">Measure Distance</button>
-            <button onclick="enableAreaMeasure()" class="button">Calculate Area</button>
-            <button onclick="resetMap()" class="button">Reset</button>
-        </div>
-    </div>
-</section>
-
-<!-- Leaflet CSS & JS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@latest/dist/leaflet.draw.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@latest/dist/leaflet-draw.css" />
-<script src="https://unpkg.com/@turf/turf"></script>
-
-<style>
-    .tools__container {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Spatial Tools with Turf.js and Leaflet</title>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <style>
+    body, html {
+      margin: 0; padding: 0; height: 100%;
+      font-family: Arial, sans-serif;
     }
-    .tools__buttons {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
+    #map {
+      width: 100%;
+      height: 80vh;
     }
-    .leaflet-container {
-        cursor: crosshair;
+    #tools {
+      padding: 10px;
+      background: #f0f0f0;
     }
-    .turf-result {
-        font-weight: bold;
-        color: #fff;
-        background: #333;
-        padding: 4px 8px;
-        border-radius: 5px;
+    #tools input, #tools button {
+      margin: 5px 10px 5px 0;
+      padding: 5px;
     }
-</style>
+    #output {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
 
-<script>
-    const map = L.map('map').setView([28.3949, 84.124], 7);
+  <div id="map"></div>
 
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
-    const satellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
-        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
-    });
+  <div id="tools">
+    <button id="addPointBtn">Add Point</button>
+    <button id="bufferBtn" disabled>Buffer (1 km)</button>
+    <button id="measureDistanceBtn" disabled>Measure Distance</button>
+    <button id="calcAreaBtn" disabled>Calculate Area</button>
 
-    const baseMaps = {
-        "OpenStreetMap": osm,
-        "Satellite": satellite
+    <div id="output"></div>
+  </div>
+
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+
+  <script>
+    // Initialize map
+    const map = L.map("map").setView([27.7172, 85.3240], 13); // Kathmandu coords
+
+    // Add OSM base layer
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution:
+        '© OpenStreetMap contributors',
+    }).addTo(map);
+
+    let points = [];
+    let markers = [];
+    let bufferLayer = null;
+    let polygonLayer = null;
+    let distanceLine = null;
+
+    const output = document.getElementById("output");
+
+    // Add point on map click when "Add Point" button activated
+    document.getElementById("addPointBtn").onclick = () => {
+      output.textContent = "Click on the map to add a point...";
+      map.once("click", function (e) {
+        const latlng = e.latlng;
+        const marker = L.marker(latlng).addTo(map);
+        markers.push(marker);
+        points.push([latlng.lng, latlng.lat]); // GeoJSON: [lng, lat]
+        output.textContent = `Point added at [${latlng.lat.toFixed(5)}, ${latlng.lng.toFixed(5)}]`;
+
+        if (points.length >= 1) {
+          document.getElementById("bufferBtn").disabled = false;
+        }
+        if (points.length >= 2) {
+          document.getElementById("measureDistanceBtn").disabled = false;
+        }
+        if (points.length >= 3) {
+          document.getElementById("calcAreaBtn").disabled = false;
+        }
+      });
     };
 
-    osm.addTo(map);
-    L.control.layers(baseMaps).addTo(map);
+    // Buffer around the first point (1 km)
+    document.getElementById("bufferBtn").onclick = () => {
+      if (points.length < 1) {
+        alert("Add at least one point first.");
+        return;
+      }
+      if (bufferLayer) {
+        map.removeLayer(bufferLayer);
+      }
 
-    const drawnItems = new L.FeatureGroup();
-    map.addLayer(drawnItems);
+      // Turf buffer expects a GeoJSON point
+      const pt = turf.point(points[0]);
+      const buffered = turf.buffer(pt, 1, { units: "kilometers" });
 
-    let drawControl = null;
-    let activeTool = null;
-    let currentDrawer = null;
-    let bufferDistance = 2000;
-    let tempLayers = [];
+      // Convert turf polygon to Leaflet layer
+      bufferLayer = L.geoJSON(buffered, {
+        style: { color: "red", fillColor: "#f03", fillOpacity: 0.3 },
+      }).addTo(map);
 
-    function resetMap() {
-        drawnItems.clearLayers();
-        tempLayers.forEach(l => map.removeLayer(l));
-        tempLayers = [];
-        map.closePopup();
-        activeTool = null;
-        if (currentDrawer) {
-            currentDrawer.disable();
-            currentDrawer = null;
-        }
-        document.getElementById("finishDraw").style.display = "none";
-    }
+      output.textContent = "Buffer of 1 km created around first point.";
+    };
 
-    function enableDrawBuffer() {
-        resetMap();
-        activeTool = 'buffer';
-        const userDistance = window.prompt("Enter buffer distance in meters:", "2000");
-        if (!userDistance || isNaN(userDistance)) {
-            alert("Invalid input. Buffer tool canceled.");
-            return;
-        }
-        bufferDistance = parseFloat(userDistance);
-        const markerDrawer = new L.Draw.Marker(map);
-        markerDrawer.enable();
-    }
+    // Measure distance between first two points
+    document.getElementById("measureDistanceBtn").onclick = () => {
+      if (points.length < 2) {
+        alert("Add at least two points to measure distance.");
+        return;
+      }
 
-    function enableDistanceMeasure() {
-        resetMap();
-        activeTool = 'distance';
-        currentDrawer = new L.Draw.Polyline(map, {
-            shapeOptions: {
-                color: '#0000ff',
-                weight: 4,
-                dashArray: '5, 10'
-            }
-        });
-        currentDrawer.enable();
-        document.getElementById("finishDraw").style.display = "block";
-    }
+      if (distanceLine) {
+        map.removeLayer(distanceLine);
+      }
 
-    function enableAreaMeasure() {
-        resetMap();
-        activeTool = 'area';
-        currentDrawer = new L.Draw.Polygon(map, {
-            shapeOptions: {
-                color: '#228B22',
-                fillColor: '#228B22',
-                fillOpacity: 0.5
-            }
-        });
-        currentDrawer.enable();
-        document.getElementById("finishDraw").style.display = "block";
-    }
+      const from = turf.point(points[0]);
+      const to = turf.point(points[1]);
+      const options = { units: "kilometers" };
+      const dist = turf.distance(from, to, options);
 
-    document.getElementById("finishDraw").addEventListener("click", () => {
-        if (currentDrawer) {
-            currentDrawer.disable();
-            currentDrawer = null;
-            document.getElementById("finishDraw").style.display = "none";
-        }
-    });
+      distanceLine = L.polyline([ 
+        [points[0][1], points[0][0]], 
+        [points[1][1], points[1][0]] 
+      ], { color: "blue" }).addTo(map);
 
-    document.addEventListener("keydown", function(e) {
-        if (e.key === "Enter" && currentDrawer) {
-            currentDrawer.disable();
-            currentDrawer = null;
-            document.getElementById("finishDraw").style.display = "none";
-        }
-    });
+      output.textContent = `Distance between first two points: ${dist.toFixed(3)} km`;
+    };
 
-    map.on(L.Draw.Event.CREATED, function (e) {
-        const layer = e.layer;
-        drawnItems.addLayer(layer);
+    // Calculate area of polygon formed by first 3 points
+    document.getElementById("calcAreaBtn").onclick = () => {
+      if (points.length < 3) {
+        alert("Add at least three points to calculate area.");
+        return;
+      }
 
-        document.getElementById("finishDraw").style.display = "none";
-        if (activeTool === 'area' && e.layerType === 'polygon') {
-            const coords = layer.getLatLngs()[0].map(pt => [pt.lng, pt.lat]);
-            coords.push(coords[0]);
-            const polygon = turf.polygon([coords]);
-            const area = turf.area(polygon);
-            const popup = L.popup()
-                .setLatLng(layer.getBounds().getCenter())
-                .setContent(`<div class='turf-result'>Area: ${area.toFixed(2)} m²</div>`)
-                .openOn(map);
-            tempLayers.push(popup);
-        }
+      if (polygonLayer) {
+        map.removeLayer(polygonLayer);
+      }
 
-        if (activeTool === 'distance' && e.layerType === 'polyline') {
-            const coords = layer.getLatLngs().map(pt => [pt.lng, pt.lat]);
-            const line = turf.lineString(coords);
-            const length = turf.length(line, { units: 'kilometers' });
-            const popup = L.popup()
-                .setLatLng(layer.getBounds().getCenter())
-                .setContent(`<div class='turf-result'>Distance: ${(length * 1000).toFixed(2)} m</div>`)
-                .openOn(map);
-            tempLayers.push(popup);
-        }
+      // Create polygon GeoJSON
+      const polygon = turf.polygon([[
+        points[0],
+        points[1],
+        points[2],
+        points[0]  // close polygon
+      ]]);
 
-        if (activeTool === 'buffer' && e.layerType === 'marker') {
-            const pt = layer.getLatLng();
-            const point = turf.point([pt.lng, pt.lat]);
-            const buffered = turf.buffer(point, bufferDistance / 1000, { units: 'kilometers' });
-            const bufferLayer = L.geoJSON(buffered, {
-                style: {
-                    color: '#FF0000',
-                    fillColor: '#FF6666',
-                    fillOpacity: 0.5
-                }
-            }).addTo(map);
-            const popup = L.popup()
-                .setLatLng(pt)
-                .setContent(`<div class='turf-result'>${bufferDistance} meter buffer created</div>`)
-                .openOn(map);
-            tempLayers.push(bufferLayer);
-            tempLayers.push(popup);
-        }
-    });
-</script>
+      const area = turf.area(polygon); // in square meters
+
+      polygonLayer = L.geoJSON(polygon, {
+        style: { color: "green", fillColor: "#0f3", fillOpacity: 0.3 },
+      }).addTo(map);
+
+      output.textContent = `Area of polygon formed by first 3 points: ${(area/1000000).toFixed(3)} sq km`;
+    };
+  </script>
+</body>
+</html>
 
 
 
