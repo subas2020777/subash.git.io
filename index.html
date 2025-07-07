@@ -209,7 +209,7 @@
         </div>
     </div>
 </section> -->
-                        <!--===== SPATIAL TOOL =====-->
+<!--===== SPATIAL TOOL =====-->
 <section class="section spatial-tool" id="tools">
     <h2 class="section-title">Spatial Tools</h2>
     <div class="tools__container bd-grid">
@@ -269,37 +269,29 @@
     let activeTool = null;
 
     const drawControl = new L.Control.Draw({
-        draw: {
-            polygon: false,
-            polyline: false,
-            rectangle: false,
-            circle: false,
-            marker: false
-        },
+        draw: false,
         edit: {
             featureGroup: drawnItems
         }
     });
     map.addControl(drawControl);
 
-    function setDrawOptions(options) {
-        drawControl.setDrawingOptions(options);
-        drawControl._toolbars.draw._modes[Object.keys(options.draw)[0]].handler.enable();
-    }
-
     function enableDrawBuffer() {
         activeTool = 'buffer';
-        setDrawOptions({ draw: { marker: true } });
+        const markerDrawer = new L.Draw.Marker(map);
+        markerDrawer.enable();
     }
 
     function enableDistanceMeasure() {
         activeTool = 'distance';
-        setDrawOptions({ draw: { polyline: true } });
+        const lineDrawer = new L.Draw.Polyline(map);
+        lineDrawer.enable();
     }
 
     function enableAreaMeasure() {
         activeTool = 'area';
-        setDrawOptions({ draw: { polygon: true } });
+        const polygonDrawer = new L.Draw.Polygon(map);
+        polygonDrawer.enable();
     }
 
     function searchNearbyHospital() {
@@ -326,12 +318,8 @@
                 .openOn(map);
         } else if (activeTool === 'distance' && e.layerType === 'polyline') {
             const coords = layer.getLatLngs().map(pt => [pt.lng, pt.lat]);
-            let total = 0;
-            for (let i = 0; i < coords.length - 1; i++) {
-                const from = turf.point(coords[i]);
-                const to = turf.point(coords[i + 1]);
-                total += turf.distance(from, to);
-            }
+            const line = turf.lineString(coords);
+            const total = turf.length(line);
             L.popup()
                 .setLatLng(layer.getBounds().getCenter())
                 .setContent(`Distance: ${total.toFixed(2)} km`)
@@ -339,7 +327,8 @@
         } else if (activeTool === 'buffer' && e.layerType === 'marker') {
             const point = turf.point([layer.getLatLng().lng, layer.getLatLng().lat]);
             const buffered = turf.buffer(point, 2, { units: 'kilometers' });
-            L.geoJSON(buffered).addTo(map);
+            const bufferedLayer = L.geoJSON(buffered);
+            bufferedLayer.addTo(map);
             L.popup()
                 .setLatLng(layer.getLatLng())
                 .setContent('2km buffer applied')
@@ -347,6 +336,7 @@
         }
     });
 </script>
+
 
 
 <!--===== FOOTER =====-->
