@@ -221,23 +221,6 @@
             <button onclick="enableDrawBuffer()" class="button">Buffer Tool</button>
             <button onclick="enableDistanceMeasure()" class="button">Measure Distance</button>
             <button onclick="enableAreaMeasure()" class="button">Calculate Area</button>
-            <button onclick="searchNearbyHospital()" class="button">Nearby Hospitals</button>
-            <button onclick="resetMap()" class="button">Reset</button>
-        </div>
-    </div>
-</section>
-<!--===== SPATIAL TOOL =====-->
-<section class="section spatial-tool" id="tools">
-    <h2 class="section-title">Spatial Tools</h2>
-    <div class="tools__container bd-grid">
-        <div class="map__wrapper">
-            <div id="map" style="height: 500px; border-radius: 10px;"></div>
-        </div>
-
-        <div class="tools__buttons">
-            <button onclick="enableDrawBuffer()" class="button">Buffer Tool</button>
-            <button onclick="enableDistanceMeasure()" class="button">Measure Distance</button>
-            <button onclick="enableAreaMeasure()" class="button">Calculate Area</button>
             <button onclick="resetMap()" class="button">Reset</button>
         </div>
     </div>
@@ -286,7 +269,7 @@
 
     function resetMap() {
         drawnItems.clearLayers();
-        map.eachLayer(function (layer) {
+        map.eachLayer(layer => {
             if (layer instanceof L.GeoJSON && !layer._url) map.removeLayer(layer);
         });
         map.closePopup();
@@ -296,18 +279,21 @@
     function enableDrawBuffer() {
         resetMap();
         activeTool = 'buffer';
+        alert("Click on the map to select a location for buffering.");
         new L.Draw.Marker(map).enable();
     }
 
     function enableDistanceMeasure() {
         resetMap();
         activeTool = 'distance';
+        alert("Draw a line to measure distance in meters.");
         new L.Draw.Polyline(map).enable();
     }
 
     function enableAreaMeasure() {
         resetMap();
         activeTool = 'area';
+        alert("Draw a polygon to calculate area in square meters.");
         new L.Draw.Polygon(map).enable();
     }
 
@@ -320,30 +306,30 @@
             coords.push(coords[0]);
             const polygon = turf.polygon([coords]);
             const area = turf.area(polygon);
-            const popup = L.popup()
+            L.popup()
                 .setLatLng(layer.getBounds().getCenter())
-                .setContent(`Area: ${(area / 10000).toFixed(2)} ha`)
+                .setContent(`Area: ${area.toFixed(2)} m²`)
                 .openOn(map);
         }
 
         if (activeTool === 'distance' && e.layerType === 'polyline') {
             const coords = layer.getLatLngs().map(pt => [pt.lng, pt.lat]);
             const line = turf.lineString(coords);
-            const total = turf.length(line);
-            const popup = L.popup()
+            const length = turf.length(line, { units: 'meters' });
+            L.popup()
                 .setLatLng(layer.getBounds().getCenter())
-                .setContent(`Distance: ${total.toFixed(2)} km`)
+                .setContent(`Distance: ${length.toFixed(2)} m`)
                 .openOn(map);
         }
 
         if (activeTool === 'buffer' && e.layerType === 'marker') {
             const pt = layer.getLatLng();
             const point = turf.point([pt.lng, pt.lat]);
-            const buffered = turf.buffer(point, 2, { units: 'kilometers' });
+            const buffered = turf.buffer(point, 2000, { units: 'meters' });
             const bufferLayer = L.geoJSON(buffered).addTo(map);
-            const popup = L.popup()
+            L.popup()
                 .setLatLng(pt)
-                .setContent(`2km buffer created`)
+                .setContent(`2,000 meter buffer created`)
                 .openOn(map);
         }
     });
