@@ -265,6 +265,7 @@
     const drawnItems = new L.FeatureGroup();
     map.addLayer(drawnItems);
 
+    let drawControl = null;
     let activeTool = null;
 
     function resetMap() {
@@ -286,14 +287,14 @@
     function enableDistanceMeasure() {
         resetMap();
         activeTool = 'distance';
-        alert("Draw a line to measure distance in meters.");
+        alert("Draw a line to measure distance in meters. Double-click to finish drawing.");
         new L.Draw.Polyline(map).enable();
     }
 
     function enableAreaMeasure() {
         resetMap();
         activeTool = 'area';
-        alert("Draw a polygon to calculate area in square meters.");
+        alert("Draw a polygon to calculate area in square meters. Double-click to finish drawing.");
         new L.Draw.Polygon(map).enable();
     }
 
