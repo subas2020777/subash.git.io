@@ -226,6 +226,22 @@
         </div>
     </div>
 </section>
+<!--===== SPATIAL TOOL =====-->
+<section class="section spatial-tool" id="tools">
+    <h2 class="section-title">Spatial Tools</h2>
+    <div class="tools__container bd-grid">
+        <div class="map__wrapper">
+            <div id="map" style="height: 500px; border-radius: 10px;"></div>
+        </div>
+
+        <div class="tools__buttons">
+            <button onclick="enableDrawBuffer()" class="button">Buffer Tool</button>
+            <button onclick="enableDistanceMeasure()" class="button">Measure Distance</button>
+            <button onclick="enableAreaMeasure()" class="button">Calculate Area</button>
+            <button onclick="resetMap()" class="button">Reset</button>
+        </div>
+    </div>
+</section>
 
 <!-- Leaflet CSS & JS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -268,40 +284,31 @@
 
     let activeTool = null;
 
-    const drawControl = new L.Control.Draw({
-        draw: false,
-        edit: {
-            featureGroup: drawnItems
-        }
-    });
-    map.addControl(drawControl);
+    function resetMap() {
+        drawnItems.clearLayers();
+        map.eachLayer(function (layer) {
+            if (layer instanceof L.GeoJSON && !layer._url) map.removeLayer(layer);
+        });
+        map.closePopup();
+        activeTool = null;
+    }
 
     function enableDrawBuffer() {
+        resetMap();
         activeTool = 'buffer';
-        const markerDrawer = new L.Draw.Marker(map);
-        markerDrawer.enable();
+        new L.Draw.Marker(map).enable();
     }
 
     function enableDistanceMeasure() {
+        resetMap();
         activeTool = 'distance';
-        const lineDrawer = new L.Draw.Polyline(map);
-        lineDrawer.enable();
+        new L.Draw.Polyline(map).enable();
     }
 
     function enableAreaMeasure() {
+        resetMap();
         activeTool = 'area';
-        const polygonDrawer = new L.Draw.Polygon(map);
-        polygonDrawer.enable();
-    }
-
-    function searchNearbyHospital() {
-        alert("Nearby Hospital Search: This requires Overpass API or a GeoJSON dataset.");
-    }
-
-    function resetMap() {
-        drawnItems.clearLayers();
-        map.closePopup();
-        activeTool = null;
+        new L.Draw.Polygon(map).enable();
     }
 
     map.on(L.Draw.Event.CREATED, function (e) {
@@ -310,32 +317,38 @@
 
         if (activeTool === 'area' && e.layerType === 'polygon') {
             const coords = layer.getLatLngs()[0].map(pt => [pt.lng, pt.lat]);
-            const polygon = turf.polygon([[...coords, coords[0]]]);
+            coords.push(coords[0]);
+            const polygon = turf.polygon([coords]);
             const area = turf.area(polygon);
-            L.popup()
+            const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
                 .setContent(`Area: ${(area / 10000).toFixed(2)} ha`)
                 .openOn(map);
-        } else if (activeTool === 'distance' && e.layerType === 'polyline') {
+        }
+
+        if (activeTool === 'distance' && e.layerType === 'polyline') {
             const coords = layer.getLatLngs().map(pt => [pt.lng, pt.lat]);
             const line = turf.lineString(coords);
             const total = turf.length(line);
-            L.popup()
+            const popup = L.popup()
                 .setLatLng(layer.getBounds().getCenter())
                 .setContent(`Distance: ${total.toFixed(2)} km`)
                 .openOn(map);
-        } else if (activeTool === 'buffer' && e.layerType === 'marker') {
-            const point = turf.point([layer.getLatLng().lng, layer.getLatLng().lat]);
+        }
+
+        if (activeTool === 'buffer' && e.layerType === 'marker') {
+            const pt = layer.getLatLng();
+            const point = turf.point([pt.lng, pt.lat]);
             const buffered = turf.buffer(point, 2, { units: 'kilometers' });
-            const bufferedLayer = L.geoJSON(buffered);
-            bufferedLayer.addTo(map);
-            L.popup()
-                .setLatLng(layer.getLatLng())
-                .setContent('2km buffer applied')
+            const bufferLayer = L.geoJSON(buffered).addTo(map);
+            const popup = L.popup()
+                .setLatLng(pt)
+                .setContent(`2km buffer created`)
                 .openOn(map);
         }
     });
 </script>
+
 
 
 
