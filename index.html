@@ -344,6 +344,14 @@
         }
     });
 
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Enter" && currentDrawer) {
+            currentDrawer.disable();
+            currentDrawer = null;
+            document.getElementById("finishDraw").style.display = "none";
+        }
+    });
+
     map.on(L.Draw.Event.CREATED, function (e) {
         const layer = e.layer;
         drawnItems.addLayer(layer);
