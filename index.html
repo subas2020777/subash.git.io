@@ -209,6 +209,145 @@
         </div>
     </div>
 </section> -->
+                        <!--===== SPATIAL TOOL =====-->
+<section class="section spatial-tool" id="tools">
+    <h2 class="section-title">Spatial Tools</h2>
+    <div class="tools__container bd-grid">
+        <div class="map__wrapper">
+            <div id="map" style="height: 500px; border-radius: 10px;"></div>
+        </div>
+
+        <div class="tools__buttons">
+            <button onclick="enableDrawBuffer()" class="button">Buffer Tool</button>
+            <button onclick="enableDistanceMeasure()" class="button">Measure Distance</button>
+            <button onclick="enableAreaMeasure()" class="button">Calculate Area</button>
+            <button onclick="searchNearbyHospital()" class="button">Nearby Hospitals</button>
+            <button onclick="resetMap()" class="button">Reset</button>
+        </div>
+    </div>
+</section>
+
+<!-- Leaflet CSS & JS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@latest/dist/leaflet.draw.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@latest/dist/leaflet.draw.css" />
+<script src="https://unpkg.com/@turf/turf"></script>
+
+<style>
+    .tools__container {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    .tools__buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+</style>
+
+<script>
+    const map = L.map('map').setView([28.3949, 84.124], 7);
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png');
+    const satellite = L.tileLayer('https://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        subdomains: ['mt0', 'mt1', 'mt2', 'mt3']
+    });
+
+    const baseMaps = {
+        "OpenStreetMap": osm,
+        "Satellite": satellite
+    };
+
+    osm.addTo(map);
+    L.control.layers(baseMaps).addTo(map);
+
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    let activeTool = null;
+
+    const drawControl = new L.Control.Draw({
+        draw: {
+            polygon: false,
+            polyline: false,
+            rectangle: false,
+            circle: false,
+            marker: false
+        },
+        edit: {
+            featureGroup: drawnItems
+        }
+    });
+    map.addControl(drawControl);
+
+    function setDrawOptions(options) {
+        drawControl.setDrawingOptions(options);
+        drawControl._toolbars.draw._modes[Object.keys(options.draw)[0]].handler.enable();
+    }
+
+    function enableDrawBuffer() {
+        activeTool = 'buffer';
+        setDrawOptions({ draw: { marker: true } });
+    }
+
+    function enableDistanceMeasure() {
+        activeTool = 'distance';
+        setDrawOptions({ draw: { polyline: true } });
+    }
+
+    function enableAreaMeasure() {
+        activeTool = 'area';
+        setDrawOptions({ draw: { polygon: true } });
+    }
+
+    function searchNearbyHospital() {
+        alert("Nearby Hospital Search: This requires Overpass API or a GeoJSON dataset.");
+    }
+
+    function resetMap() {
+        drawnItems.clearLayers();
+        map.closePopup();
+        activeTool = null;
+    }
+
+    map.on(L.Draw.Event.CREATED, function (e) {
+        const layer = e.layer;
+        drawnItems.addLayer(layer);
+
+        if (activeTool === 'area' && e.layerType === 'polygon') {
+            const coords = layer.getLatLngs()[0].map(pt => [pt.lng, pt.lat]);
+            const polygon = turf.polygon([[...coords, coords[0]]]);
+            const area = turf.area(polygon);
+            L.popup()
+                .setLatLng(layer.getBounds().getCenter())
+                .setContent(`Area: ${(area / 10000).toFixed(2)} ha`)
+                .openOn(map);
+        } else if (activeTool === 'distance' && e.layerType === 'polyline') {
+            const coords = layer.getLatLngs().map(pt => [pt.lng, pt.lat]);
+            let total = 0;
+            for (let i = 0; i < coords.length - 1; i++) {
+                const from = turf.point(coords[i]);
+                const to = turf.point(coords[i + 1]);
+                total += turf.distance(from, to);
+            }
+            L.popup()
+                .setLatLng(layer.getBounds().getCenter())
+                .setContent(`Distance: ${total.toFixed(2)} km`)
+                .openOn(map);
+        } else if (activeTool === 'buffer' && e.layerType === 'marker') {
+            const point = turf.point([layer.getLatLng().lng, layer.getLatLng().lat]);
+            const buffered = turf.buffer(point, 2, { units: 'kilometers' });
+            L.geoJSON(buffered).addTo(map);
+            L.popup()
+                .setLatLng(layer.getLatLng())
+                .setContent('2km buffer applied')
+                .openOn(map);
+        }
+    });
+</script>
+
 
 <!--===== FOOTER =====-->
 <footer class="footer">
